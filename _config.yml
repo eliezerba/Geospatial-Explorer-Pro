@@ -1,0 +1,16 @@
+# GitHub Pages Configuration
+# This tells GitHub Pages to treat this as a regular static website, not a Jekyll site
+
+# Disable Jekyll processing
+theme: null
+
+# Include hidden files in the build
+include:
+  - .github
+
+# Ignore unnecessary files
+exclude:
+  - .gitignore
+  - README.md
+  - .vscode
+  - .idea

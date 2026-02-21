@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת גבולות היסטורית (גרסה 2.3 - GitHub Pages Ready)</title>
+    
+    <!-- CDNs -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;700;900&display=swap');
+        body { font-family: 'Assistant', sans-serif; margin: 0; padding: 0; background: #f8fafc; }
+        
+        #map-container { height: 100%; width: 100%; background: #e2e8f0; } 
+        .leaflet-container { font-family: 'Assistant', sans-serif; }
+        
+        /* Main Year Slider Customizations */
+        .custom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px; height: 28px;
+            background: #2563eb; cursor: pointer;
+            border-radius: 50%; border: 4px solid white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: transform 0.1s;
+        }
+        .custom-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        .custom-slider { appearance: none; -webkit-appearance: none; height: 10px; background: #cbd5e1; border-radius: 5px; outline: none; border: 1px solid #94a3b8; }
+        
+        /* Distance Slider Customizations */
+        .dist-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px; height: 16px;
+            background: #475569; cursor: pointer;
+            border-radius: 50%; border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .dist-slider { appearance: none; -webkit-appearance: none; height: 6px; background: #e2e8f0; border-radius: 3px; outline: none; }
+        .dist-slider::-moz-range-thumb {
+            width: 16px; height: 16px;
+            background: #475569; cursor: pointer;
+            border-radius: 50%; border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .dist-slider::-moz-range-track {
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            border: 0;
+        }
+        .dual-range-wrap { position: relative; height: 22px; }
+        .dual-range-wrap .dist-slider {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 8px;
+            width: 100%;
+            margin: 0;
+            background: transparent;
+            pointer-events: none;
+        }
+        .dual-range-wrap .dist-slider::-webkit-slider-thumb { pointer-events: all; }
+        .dual-range-wrap .dist-slider::-moz-range-thumb { pointer-events: all; }
+
+        #boot-status {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 24px;
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.6;
+            background: #f8fafc;
+        }
+        #boot-status.hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div id="boot-status">טוען את המפה... אם לא מופיע כלום תוך כמה שניות, רענן את הדף ובדוק חיבור אינטרנט.</div>
+    <div id="root"></div>
+
+    <script>
+        (function () {
+            const bootEl = document.getElementById('boot-status');
+            window.__appBootReady = function () {
+                if (bootEl) bootEl.classList.add('hidden');
+            };
+
+            const showBootError = function (message) {
+                if (!bootEl) return;
+                bootEl.classList.remove('hidden');
+                bootEl.innerHTML = '⚠️ האפליקציה לא נטענה.<br/>' + message + '<br/><br/>נסה לפתוח דרך GitHub Pages או שרת מקומי.';
+            };
+
+            window.addEventListener('error', function (event) {
+                const msg = event && event.message ? event.message : 'שגיאה לא ידועה';
+                showBootError(msg);
+            });
+
+            window.addEventListener('unhandledrejection', function (event) {
+                const reason = event && event.reason ? String(event.reason) : 'Promise rejection';
+                showBootError(reason);
+            });
+
+            setTimeout(function () {
+                const root = document.getElementById('root');
+                if (root && root.children.length === 0) {
+                    showBootError('נראה שאחד מקבצי הספריות (React/Babel/Leaflet) לא נטען.');
+                }
+            }, 5000);
+        })();
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        const App = () => {
+            const [year, setYear] = useState(1950);
+            const [geoData, setGeoData] = useState(null);
+            const [locations, setLocations] = useState([]);
+            const [selectedLocation, setSelectedLocation] = useState(null);
+            const [rawCShapesData, setRawCShapesData] = useState(null);
+            
+            // Version 2 States
+            const [analysisMode, setAnalysisMode] = useState('main');
+            const [locationsInEntity, setLocationsInEntity] = useState([]);
+            const [selectedDuplicateGroup, setSelectedDuplicateGroup] = useState(null);
+            const [minDistanceFilter, setMinDistanceFilter] = useState(0);
+            const [maxDistanceFilter, setMaxDistanceFilter] = useState(200);
+            
+            const [activeEntityData, setActiveEntityData] = useState(null);
+            const [searchTerm, setSearchTerm] = useState("");
+            const [isQuerying, setIsQuerying] = useState(false);
+            
+            // Auto-load states
+            const [dataLoaded, setDataLoaded] = useState(false);
+            const [loadingMessage, setLoadingMessage] = useState('טוען נתונים...');
+            
+            const mapRef = useRef(null);
+            const geoJsonLayerRef = useRef(null);
+            const markersLayerRef = useRef(null);
+            const fileInputRef = useRef(null);
+            const geoInputRef = useRef(null);
+            const duplicateMarkersRef = useRef({});
+
+            const getPropValue = (props, keys) => {
+                if (!props) return null;
+                const lowerKeys = keys.map(k => k.toLowerCase());
+                for (let k in props) {
+                    if (lowerKeys.includes(k.toLowerCase())) return props[k];
+                }
+                return null;
+            };
+
+            const getEntityDisplayName = (props) => {
+                const rawName = getPropValue(props, ['Name', 'name', 'cntry_name', 'gwname']);
+                if (rawName === null || rawName === undefined) return null;
+                const nameText = String(rawName).trim();
+                if (!nameText) return null;
+                if (/^-?\d+(\.\d+)?$/.test(nameText)) return null;
+                return nameText;
+            };
+
+            const extractYear = (val) => {
+                if (val === null || val === undefined) return null;
+                if (typeof val === 'number') return val;
+                const str = String(val).trim();
+                const match = str.match(/\b(1[0-9]{3}|20[0-2][0-9])\b/);
+                if (match) return parseInt(match[0], 10);
+                return parseInt(str.substring(0, 4), 10);
+            };
+
+            const duplicateNamesGroups = useMemo(() => {
+                const nameMap = {};
+                locations.forEach(loc => {
+                    const names = new Set();
+                    if (loc['Hebrew Name']) names.add(String(loc['Hebrew Name']).trim());
+                    if (loc['English Name']) names.add(String(loc['English Name']).trim());
+                    if (loc['Alt English Names']) {
+                        String(loc['Alt English Names']).split(',').forEach(n => {
+                            const clean = n.trim();
+                            if(clean) names.add(clean);
+                        });
+                    }
+
+                    names.forEach(n => {
+                        if (!nameMap[n]) nameMap[n] = [];
+                        const isDup = nameMap[n].some(existing => 
+                            existing.Latitude === loc.Latitude && existing.Longitude === loc.Longitude
+                        );
+                        if (!isDup) nameMap[n].push(loc);
+                    });
+                });
+
+                return Object.keys(nameMap)
+                    .filter(name => nameMap[name].length > 1)
+                    .map(name => {
+                        const locs = nameMap[name];
+                        const distances = [];
+                        let minDistance = Infinity;
+                        let maxDistance = 0;
+                        
+                        for(let i = 0; i < locs.length; i++) {
+                            for(let j = i + 1; j < locs.length; j++) {
+                                try {
+                                    const pt1 = turf.point([parseFloat(locs[i].Longitude || locs[i].longitude), parseFloat(locs[i].Latitude || locs[i].latitude)]);
+                                    const pt2 = turf.point([parseFloat(locs[j].Longitude || locs[j].longitude), parseFloat(locs[j].Latitude || locs[j].latitude)]);
+                                    const dist = turf.distance(pt1, pt2, {units: 'kilometers'});
+                                    distances.push({ from: i, to: j, dist });
+                                    if(dist < minDistance) minDistance = dist;
+                                    if(dist > maxDistance) maxDistance = dist;
+                                } catch(e) {}
+                            }
+                        }
+                        return { name, locations: locs, distances, minDistance, maxDistance };
+                    })
+                    .sort((a, b) => a.name.localeCompare(b.name, 'he'));
+            }, [locations]);
+
+            const displayedDuplicates = useMemo(() => {
+                return duplicateNamesGroups.filter(g => {
+                    if (!g.distances || g.distances.length === 0) return false;
+                    return g.distances.some(d => d.dist >= minDistanceFilter && d.dist <= maxDistanceFilter);
+                });
+            }, [duplicateNamesGroups, minDistanceFilter, maxDistanceFilter]);
+
+            useEffect(() => {
+                if (!selectedDuplicateGroup) return;
+                const stillVisible = displayedDuplicates.some(g => g.name === selectedDuplicateGroup.name);
+                if (!stillVisible) setSelectedDuplicateGroup(null);
+            }, [displayedDuplicates, selectedDuplicateGroup]);
+
+            const filterGeoJSONByYear = (data, targetYear) => {
+                const filteredFeatures = data.features.filter(f => {
+                    const props = f.properties;
+                    if (!props) return false;
+                    const sVal = getPropValue(props, ['From', 'from', 'start_year', 'startyear', 'gwsyear', 'start']);
+                    const eVal = getPropValue(props, ['To', 'to', 'end_year', 'endyear', 'gweyear', 'end']);
+                    if (sVal === null && eVal === null) return true;
+
+                    const parsedStartYear = extractYear(sVal);
+                    const parsedEndYear = extractYear(eVal);
+                    const startYear = parsedStartYear !== null && !isNaN(parsedStartYear) ? parsedStartYear : -9999; 
+                    let endYear = parsedEndYear !== null && !isNaN(parsedEndYear) ? parsedEndYear : 9999;   
+                    if (endYear === 0 || endYear === null) endYear = 9999;
+                    return targetYear >= startYear && targetYear <= endYear;
+                });
+                return { collection: { type: "FeatureCollection", features: filteredFeatures } };
+            };
+
+            const getBestFeatureForPoint = (features, lat, lng) => {
+                if (!features || !Array.isArray(features)) return null;
+                const point = turf.point([lng, lat]);
+                const matches = [];
+
+                for (const feature of features) {
+                    try {
+                        if (!feature?.geometry) continue;
+                        const geometryType = feature.geometry.type;
+                        if (geometryType !== 'Polygon' && geometryType !== 'MultiPolygon') continue;
+                        if (!turf.booleanPointInPolygon(point, feature)) continue;
+
+                        const areaRaw = getPropValue(feature.properties, ['Area', 'area']);
+                        const area = parseFloat(areaRaw);
+                        const normalizedArea = !isNaN(area) && area > 0 ? area : Number.MAX_SAFE_INTEGER;
+                        const fromRaw = getPropValue(feature.properties, ['From', 'from']);
+                        const toRaw = getPropValue(feature.properties, ['To', 'to']);
+                        const fromYear = extractYear(fromRaw);
+                        const toYear = extractYear(toRaw);
+
+                        matches.push({
+                            feature,
+                            area: normalizedArea,
+                            fromYear: isNaN(fromYear) || fromYear === null ? -9999 : fromYear,
+                            toYear: isNaN(toYear) || toYear === null ? 9999 : toYear
+                        });
+                    } catch (e) {}
+                }
+
+                if (matches.length === 0) return null;
+
+                matches.sort((a, b) => {
+                    if (a.area !== b.area) return a.area - b.area;
+                    if (a.toYear !== b.toYear) return b.toYear - a.toYear;
+                    return b.fromYear - a.fromYear;
+                });
+
+                return matches[0].feature;
+            };
+
+            useEffect(() => {
+                if (!mapRef.current) {
+                    mapRef.current = L.map('map-container', { zoomControl: false }).setView([31.7, 35.2], 4);
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; CARTO',
+                        maxZoom: 10
+                    }).addTo(mapRef.current);
+                    L.control.zoom({ position: 'topright' }).addTo(mapRef.current);
+                }
+            }, []);
+
+            const parseCsvText = (csvText) => {
+                return new Promise((resolve, reject) => {
+                    Papa.parse(csvText, {
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                            try {
+                                const valid = results.data.filter(r => {
+                                    const lat = parseFloat(r.Latitude || r.latitude);
+                                    const lng = parseFloat(r.Longitude || r.longitude);
+                                    return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+                                });
+                                resolve(valid);
+                            } catch (err) {
+                                reject(err);
+                            }
+                        },
+                        error: (err) => reject(err)
+                    });
+                });
+            };
+
+            // Auto-load CSV and GeoJSON files
+            useEffect(() => {
+                let cancelled = false;
+                const autoLoadFiles = async () => {
+                    setLoadingMessage('טוען נתונים...');
+                    let csvLoaded = false;
+                    let geoLoaded = false;
+                    
+                    try {
+                        // Try to load CSV file (Gazetteer) from same folder
+                        const csvPaths = ['./Dov Play Gaz - Sheet1.csv', './Dov%20Play%20Gaz%20-%20Sheet1.csv'];
+                        for (const path of csvPaths) {
+                            try {
+                                const csvResponse = await fetch(path);
+                                if (!csvResponse.ok) continue;
+                                const csvText = await csvResponse.text();
+                                const valid = await parseCsvText(csvText);
+                                if (!cancelled) {
+                                    setLocations(valid);
+                                }
+                                csvLoaded = true;
+                                console.log('✓ CSV loaded:', valid.length, 'locations');
+                                break;
+                            } catch (e) {
+                                console.warn('CSV error from', path, e.message);
+                            }
+                        }
+
+                        // Try to load GeoJSON file (Boundaries) from same folder
+                        const geoPaths = ['./GEO.json'];
+                        for (const path of geoPaths) {
+                            try {
+                                const geoResponse = await fetch(path);
+                                if (!geoResponse.ok) continue;
+                                const geoDataContent = await geoResponse.json();
+                                if (!cancelled) {
+                                    setRawCShapesData(geoDataContent);
+                                    const filteredData = filterGeoJSONByYear(geoDataContent, year);
+                                    setGeoData(filteredData.collection);
+                                }
+                                geoLoaded = true;
+                                console.log('✓ GeoJSON loaded:', geoDataContent.features.length, 'features');
+                                break;
+                            } catch (e) {
+                                console.warn('GeoJSON error from', path, e.message);
+                            }
+                        }
+                        
+                        if (!cancelled) {
+                            setDataLoaded(true);
+                            if (csvLoaded || geoLoaded) {
+                                setLoadingMessage('');
+                            } else {
+                                setLoadingMessage('⚠️ לא היה ניתן לטעון אוטומטית (כנראה file://). ניתן להעלות ידנית.');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error auto-loading files:', error);
+                        if (!cancelled) {
+                            setDataLoaded(true);
+                            setLoadingMessage('⚠️ שגיאה בטעינה אוטומטית. ניתן להעלות ידנית.');
+                        }
+                    }
+                };
+
+                autoLoadFiles();
+                return () => { cancelled = true; };
+            }, []);
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                Papa.parse(file, {
+                    header: true, dynamicTyping: true, skipEmptyLines: true,
+                    complete: (results) => {
+                        const valid = results.data.filter(r => {
+                            const lat = parseFloat(r.Latitude || r.latitude);
+                            const lng = parseFloat(r.Longitude || r.longitude);
+                            return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+                        });
+                        setLocations(valid);
+                        console.log('✓ CSV loaded:', valid.length, 'locations');
+                    }
+                });
+            };
+
+            const handleGeoFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setIsQuerying(true);
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        setRawCShapesData(parsed);
+                        const filteredData = filterGeoJSONByYear(parsed, year);
+                        setGeoData(filteredData.collection);
+                        console.log('✓ GeoJSON loaded:', parsed.features.length, 'features');
+                        setLoadingMessage('');
+                    } catch (err) {
+                        alert("הקובץ אינו בפורמט GeoJSON תקין.");
+                    } finally { setIsQuerying(false); }
+                };
+                reader.readAsText(file);
+            };
+
+            useEffect(() => {
+                const timer = setTimeout(() => {
+                    if (rawCShapesData) {
+                        const filteredData = filterGeoJSONByYear(rawCShapesData, year);
+                        setGeoData(filteredData.collection);
+                    }
+                }, 150);
+                return () => clearTimeout(timer);
+            }, [year, rawCShapesData]);
+
+            useEffect(() => {
+                if (mapRef.current && geoData) {
+                    if (geoJsonLayerRef.current) mapRef.current.removeLayer(geoJsonLayerRef.current);
+                    
+                    geoJsonLayerRef.current = L.geoJson(geoData, {
+                        style: (feature) => {
+                            let style = { color: "#1e293b", weight: 1.5, opacity: 0.8, fillColor: "#94a3b8", fillOpacity: 0.3 };
+                            if (analysisMode === 'duplicates' && selectedDuplicateGroup) {
+                                const isRelated = selectedDuplicateGroup.locations.some(loc => {
+                                    try {
+                                        const pt = turf.point([parseFloat(loc.Longitude || loc.longitude), parseFloat(loc.Latitude || loc.latitude)]);
+                                        return turf.booleanPointInPolygon(pt, feature);
+                                    } catch(e) { return false; }
+                                });
+                                if (isRelated) style = { color: "#dc2626", weight: 2.5, opacity: 1, fillColor: "#fca5a5", fillOpacity: 0.5 };
+                            } else if (analysisMode === 'main' && activeEntityData) {
+                                const id1 = getPropValue(feature.properties, ['Id', 'id', 'NAME', 'name', 'Holder', 'gwid']);
+                                const id2 = getPropValue(activeEntityData, ['Id', 'id', 'NAME', 'name', 'Holder', 'gwid']);
+                                if (id1 && id2 && String(id1) === String(id2)) {
+                                    style = { color: "#0ea5e9", weight: 2.5, opacity: 1, fillColor: "#06b6d4", fillOpacity: 0.5 };
+                                }
+                            }
+                            return style;
+                        },
+                        onEachFeature: (feature, layer) => {
+                            layer.on('click', (e) => {
+                                e.originalEvent.stopPropagation();
+                                if (analysisMode === 'main') {
+                                    setActiveEntityData(feature.properties);
+                                    const ptsInside = locations.filter(loc => {
+                                        const lat = parseFloat(loc.Latitude || loc.latitude);
+                                        const lng = parseFloat(loc.Longitude || loc.longitude);
+                                        if (isNaN(lat) || isNaN(lng)) return false;
+                                        try {
+                                            if(feature.geometry && (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon')) {
+                                                return turf.booleanPointInPolygon(turf.point([lng, lat]), feature);
+                                            }
+                                        } catch(e) {}
+                                        return false;
+                                    });
+                                    setLocationsInEntity(ptsInside);
+                                    if (ptsInside.length > 0) {
+                                        const clickedLat = e.latlng.lat;
+                                        const clickedLng = e.latlng.lng;
+                                        let nearest = null;
+                                        let nearestDist = Infinity;
+                                        ptsInside.forEach(loc => {
+                                            const lat = parseFloat(loc.Latitude || loc.latitude);
+                                            const lng = parseFloat(loc.Longitude || loc.longitude);
+                                            if (isNaN(lat) || isNaN(lng) || !mapRef.current) return;
+                                            const dist = mapRef.current.distance([clickedLat, clickedLng], [lat, lng]);
+                                            if (dist < nearestDist) {
+                                                nearestDist = dist;
+                                                nearest = loc;
+                                            }
+                                        });
+                                        if (nearest) {
+                                            setSelectedLocation(nearest);
+                                            setSearchTerm("");
+                                        }
+                                    }
+                                    
+                                    try {
+                                        const bbox = turf.bbox(feature);
+                                        mapRef.current.fitBounds([[bbox[1], bbox[0]], [bbox[3], bbox[2]]], { padding: [50, 50], maxZoom: 8 });
+                                    } catch(e) {}
+                                }
+                            });
+                        }
+                    }).addTo(mapRef.current);
+                }
+            }, [geoData, analysisMode, selectedDuplicateGroup, activeEntityData, locations]);
+
+            useEffect(() => {
+                if (!mapRef.current) return;
+                if (markersLayerRef.current) mapRef.current.removeLayer(markersLayerRef.current);
+                
+                const newLayer = L.layerGroup().addTo(mapRef.current);
+                markersLayerRef.current = newLayer;
+
+                let markerEntries = [];
+                if (analysisMode === 'duplicates' && selectedDuplicateGroup) {
+                    markerEntries = selectedDuplicateGroup.locations.map(loc => ({ loc, type: 'duplicate' }));
+                } else if (analysisMode === 'main' && selectedLocation) {
+                    const selectedLat = parseFloat(selectedLocation.Latitude || selectedLocation.latitude);
+                    const selectedLng = parseFloat(selectedLocation.Longitude || selectedLocation.longitude);
+                    const sameEntityOthers = locationsInEntity.filter(loc => {
+                        const lat = parseFloat(loc.Latitude || loc.latitude);
+                        const lng = parseFloat(loc.Longitude || loc.longitude);
+                        return !(lat === selectedLat && lng === selectedLng);
+                    });
+                    markerEntries = [
+                        { loc: selectedLocation, type: 'selected' },
+                        ...sameEntityOthers.map(loc => ({ loc, type: 'entity' }))
+                    ];
+                } else if (analysisMode === 'main' && locationsInEntity.length > 0) {
+                    markerEntries = locationsInEntity.map(loc => ({ loc, type: 'entity' }));
+                }
+
+                markerEntries.forEach(({ loc, type }, idx) => {
+                    const lat = parseFloat(loc.Latitude || loc.latitude);
+                    const lng = parseFloat(loc.Longitude || loc.longitude);
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        const color = type === 'duplicate' ? '#ef4444' : type === 'entity' ? '#06b6d4' : '#2563eb';
+                        const marker = L.circleMarker([lat, lng], { radius: 8, fillColor: color, color: 'white', weight: 2, opacity: 1, fillOpacity: 0.8 })
+                            .bindPopup(`<div style="font-family: Assistant, sans-serif; direction: rtl; text-align: right;">
+                                <div style="font-weight: bold;">${loc['Hebrew Name'] || 'N/A'}</div>
+                                <div style="font-size: 11px; color: #666;">${loc['English Name'] || 'N/A'}</div>
+                            </div>`);
+                        if (analysisMode === 'main') {
+                            marker.on('click', () => {
+                                setSelectedLocation(loc);
+                                setSearchTerm("");
+                                if (mapRef.current) {
+                                    mapRef.current.flyTo([lat, lng], 7, { duration: 1.2, easeLinearity: 0.25 });
+                                }
+                            });
+                        }
+                        marker.addTo(newLayer);
+                        
+                        if (analysisMode === 'duplicates') {
+                            duplicateMarkersRef.current[idx] = marker;
+                        }
+                    }
+                });
+
+                if (markerEntries.length > 0) {
+                    try {
+                        const pts = markerEntries.map(({ loc }) => [parseFloat(loc.Latitude || loc.latitude), parseFloat(loc.Longitude || loc.longitude)]).filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+                        if (pts.length > 0) {
+                            const bounds = L.latLngBounds(pts);
+                            mapRef.current.fitBounds(bounds, { padding: [80, 80], maxZoom: 10 });
+                        }
+                    } catch(e) {}
+                }
+            }, [selectedLocation, locationsInEntity, selectedDuplicateGroup, analysisMode]);
+
+            useEffect(() => {
+                if (analysisMode !== 'main' || !geoData || !selectedLocation) return;
+                
+                setIsQuerying(true);
+                setTimeout(() => {
+                    const lat = parseFloat(selectedLocation.Latitude || selectedLocation.latitude);
+                    const lng = parseFloat(selectedLocation.Longitude || selectedLocation.longitude);
+                    
+                    try {
+                        const matchedFeature = getBestFeatureForPoint(geoData.features, lat, lng);
+                        const foundProps = matchedFeature ? matchedFeature.properties : null;
+                        setActiveEntityData(foundProps);
+                    } catch (e) {
+                        setActiveEntityData(null);
+                    }
+                    setIsQuerying(false);
+                }, 50); 
+            }, [geoData, selectedLocation, year, analysisMode]); 
+
+            const switchMode = (mode) => {
+                setAnalysisMode(mode);
+                if (mode === 'main') {
+                    setSelectedDuplicateGroup(null);
+                } else {
+                    setSelectedLocation(null);
+                    setActiveEntityData(null);
+                    setLocationsInEntity([]);
+                }
+            };
+
+            const locationMatches = useMemo(() => {
+                if (!searchTerm.trim()) return [];
+                const term = searchTerm.toLowerCase();
+                return locations.filter(loc => {
+                    const hebName = (loc['Hebrew Name'] || '').toLowerCase();
+                    const engName = (loc['English Name'] || '').toLowerCase();
+                    const altNames = (loc['Alt English Names'] || '').toLowerCase();
+                    return hebName.includes(term) || engName.includes(term) || altNames.includes(term);
+                }).slice(0, 15);
+            }, [searchTerm, locations]);
+
+            const handleLocationSelect = (loc) => {
+                setSelectedLocation(loc);
+                setSearchTerm("");
+                setLocationsInEntity([]); 
+                
+                const lat = parseFloat(loc.Latitude || loc.latitude);
+                const lng = parseFloat(loc.Longitude || loc.longitude);
+                if (mapRef.current && !isNaN(lat) && !isNaN(lng)) {
+                    mapRef.current.flyTo([lat, lng], 7, { duration: 1.5, easeLinearity: 0.25 });
+                }
+            };
+
+            return (
+                <div className="flex h-screen bg-slate-50 text-slate-800">
+                    <aside className="w-96 bg-white border-r border-slate-300 overflow-y-auto flex flex-col">
+                        <div className="p-6 border-b border-slate-200">
+                            <h1 className="text-2xl font-black text-blue-600 mb-1">מפה היסטורית</h1>
+                            <p className="text-xs text-slate-500">מעקב גבולות בזמן אמת</p>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            <div className="mb-6 space-y-3 shrink-0">
+                                {!(locations.length > 0 && rawCShapesData) && (
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <button onClick={() => fileInputRef.current.click()} className="w-full bg-green-50 hover:bg-green-100 text-green-700 p-2 rounded-lg font-bold border border-green-300 text-sm shadow-sm transition-all">
+                                                📂 טען גזטיר (CSV)
+                                            </button>
+                                            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" className="hidden" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <button onClick={() => geoInputRef.current.click()} className="w-full bg-green-50 hover:bg-green-100 text-green-700 p-2 rounded-lg font-bold border border-green-300 text-sm shadow-sm transition-all">
+                                                📂 טען גבולות (JSON)
+                                            </button>
+                                            <input type="file" ref={geoInputRef} onChange={handleGeoFileUpload} accept=".geojson,.json" className="hidden" />
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="text-[10px] text-center text-slate-600 space-y-1">
+                                    {loadingMessage && <div className="text-blue-600 font-bold">{loadingMessage}</div>}
+                                    {locations.length > 0 && <div className="text-green-600 font-bold">✓ {locations.length} מיקומים נטענו</div>}
+                                    {rawCShapesData && <div className="text-green-600 font-bold">✓ מפות זמינות</div>}
+                                </div>
+                            </div>
+
+                            <div className="flex bg-slate-200 p-1 rounded-xl mb-6 shrink-0 shadow-inner">
+                                <button 
+                                    className={`flex-1 p-2 text-sm font-bold rounded-lg transition-all ${analysisMode === 'main' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}
+                                    onClick={() => switchMode('main')}
+                                >
+                                    🎯 ניתוח עיקרי
+                                </button>
+                                <button 
+                                    className={`flex-1 p-2 text-sm font-bold rounded-lg transition-all ${analysisMode === 'duplicates' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-500 hover:bg-slate-300'}`}
+                                    onClick={() => switchMode('duplicates')}
+                                >
+                                    🔍 שמות כפולים
+                                </button>
+                            </div>
+
+                            {analysisMode === 'main' && (
+                                <div className="space-y-3">
+                                    <input
+                                        type="text"
+                                        placeholder="חיפוש מיקום..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                                    />
+                                    
+                                    {locationMatches.length > 0 && (
+                                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                                            {locationMatches.map((loc, idx) => (
+                                                <div key={idx} onClick={() => handleLocationSelect(loc)} 
+                                                    className="p-3 bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded-lg cursor-pointer transition-all hover:border-blue-400 hover:shadow-sm text-xs">
+                                                    <span className="font-bold text-slate-800">{loc['Hebrew Name']}</span>
+                                                    <span className="text-[10px] font-normal text-slate-400"> • {loc['English Name']}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {selectedLocation && (
+                                        <div className="bg-white border-2 border-blue-300 rounded-xl p-4 space-y-3">
+                                            <div>
+                                                <div className="text-sm font-bold text-slate-700">מיקום שנבחר:</div>
+                                                <div className="font-bold text-lg text-blue-600">{selectedLocation['Hebrew Name']}</div>
+                                                <div className="text-[10px] text-slate-400">{selectedLocation['English Name']}</div>
+                                            </div>
+
+                                            {activeEntityData && (
+                                                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 p-4 rounded-xl shadow-sm space-y-3">
+                                                    <div className="text-xs font-bold text-blue-700">ישות פוליטית בשנת {year}</div>
+                                                    <div className="font-black text-xl text-blue-700 leading-tight">{getEntityDisplayName(activeEntityData) || 'ישות לא מזוהה'}</div>
+                                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                                        <div className="bg-white/70 border border-blue-100 rounded-md px-2 py-1">
+                                                            <div className="text-slate-500">סטטוס</div>
+                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['Status', 'status']) || 'לא ידוע'}</div>
+                                                        </div>
+                                                        <div className="bg-white/70 border border-blue-100 rounded-md px-2 py-1">
+                                                            <div className="text-slate-500">בירה</div>
+                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['Capital', 'capital']) || 'לא זמין'}</div>
+                                                        </div>
+                                                        <div className="bg-white/70 border border-blue-100 rounded-md px-2 py-1">
+                                                            <div className="text-slate-500">שטח</div>
+                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['Area', 'area']) || 'לא זמין'}</div>
+                                                        </div>
+                                                        <div className="bg-white/70 border border-blue-100 rounded-md px-2 py-1">
+                                                            <div className="text-slate-500">טווח שנים</div>
+                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['From', 'from']) || '?'}–{getPropValue(activeEntityData, ['To', 'to']) || '?'}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {locationsInEntity.length > 0 && (
+                                                <div className="bg-blue-50 p-3 rounded-lg">
+                                                    <div className="font-bold text-sm text-blue-700 mb-2">מיקומים נוספים באותו גוף:</div>
+                                                    <div className="space-y-1">
+                                                        {locationsInEntity.map((loc, idx) => (
+                                                            <div key={idx} onClick={() => handleLocationSelect(loc)} className="text-xs flex justify-between p-2 rounded cursor-pointer hover:bg-blue-100 transition-all">
+                                                                <span className="font-bold text-slate-700">{loc['Hebrew Name']}</span>
+                                                                <span className="text-slate-400">{loc['English Name']}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="bg-slate-100 border border-slate-300 rounded-xl p-4 text-center text-slate-600 text-sm">
+                                                📝 נוסף ניהול אוטומטי של מקורות - פנות לתיעוד.
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {analysisMode === 'duplicates' && (
+                                <div className="space-y-3">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-600">טווח מרחקים (ק"מ): {minDistanceFilter.toFixed(0)} – {maxDistanceFilter.toFixed(0)}</label>
+                                        <div className="relative pt-2" dir="ltr">
+                                            <div className="h-[6px] bg-slate-200 rounded"></div>
+                                            <div
+                                                className="absolute top-2 h-[6px] bg-orange-400 rounded"
+                                                style={{
+                                                    left: `${(minDistanceFilter / 200) * 100}%`,
+                                                    width: `${((maxDistanceFilter - minDistanceFilter) / 200) * 100}%`
+                                                }}
+                                            ></div>
+                                            <div className="dual-range-wrap">
+                                                <input
+                                                    type="range" min="0" max="200" step="5" value={minDistanceFilter}
+                                                    onChange={(e) => {
+                                                        const nextMin = parseFloat(e.target.value);
+                                                        setMinDistanceFilter(nextMin);
+                                                        if (nextMin > maxDistanceFilter) setMaxDistanceFilter(nextMin);
+                                                    }}
+                                                    className="dist-slider"
+                                                />
+                                                <input
+                                                    type="range" min="0" max="200" step="5" value={maxDistanceFilter}
+                                                    onChange={(e) => {
+                                                        const nextMax = parseFloat(e.target.value);
+                                                        setMaxDistanceFilter(nextMax);
+                                                        if (nextMax < minDistanceFilter) setMinDistanceFilter(nextMax);
+                                                    }}
+                                                    className="dist-slider"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between text-[10px] text-slate-500 mt-1" dir="ltr">
+                                            <span>0</span>
+                                            <span>50</span>
+                                            <span>100</span>
+                                            <span>150</span>
+                                            <span>200 km</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="text-xs text-slate-600 font-bold">שמות כפולים: {displayedDuplicates.length}</div>
+                                    
+                                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                                        {displayedDuplicates.map((group, idx) => (
+                                            <div key={idx} onClick={() => setSelectedDuplicateGroup(group)}
+                                                className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                                                    selectedDuplicateGroup?.name === group.name 
+                                                    ? 'bg-orange-50 border-orange-400' 
+                                                    : 'bg-white border-slate-200 hover:border-orange-300'
+                                                }`}>
+                                                <div className="font-bold text-slate-800">{group.name}</div>
+                                                <div className="text-[11px] text-slate-500">({group.locations.length} נקודות)</div>
+                                                <div className="text-[11px] text-slate-500" dir="ltr">
+                                                    {`טווח מרחקים: ${Number.isFinite(group.minDistance) ? group.minDistance.toFixed(1) : '0.0'} - ${Number.isFinite(group.maxDistance) ? group.maxDistance.toFixed(1) : '0.0'} ק"מ`}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {selectedDuplicateGroup && (
+                                        <div className="bg-white border-2 border-orange-300 rounded-xl p-4 space-y-3">
+                                            <div className="font-bold text-orange-600">{selectedDuplicateGroup.name}</div>
+
+                                            {selectedDuplicateGroup.distances.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <div className="text-xs font-bold text-slate-700">מרחקים בין נקודות:</div>
+                                                    {selectedDuplicateGroup.distances.map((d, i) => {
+                                                        let colorClass = 'bg-green-50 text-green-900 border-green-200';
+                                                        let warningIcon = '✅';
+                                                        if (d.dist < 5) {
+                                                            colorClass = 'bg-red-100 text-red-900 border-red-400 shadow-[0_0_10px_rgba(239,68,68,0.4)]';
+                                                            warningIcon = '⚠️';
+                                                        } else if (d.dist < 50) {
+                                                            colorClass = 'bg-orange-50 text-orange-900 border-orange-300';
+                                                            warningIcon = '🔸';
+                                                        }
+                                                        return (
+                                                            <div key={i} className={`p-2 rounded-lg border flex justify-between items-center text-sm font-bold ${colorClass}`}>
+                                                                <div className="flex gap-2 items-center">
+                                                                    <span>{warningIcon}</span>
+                                                                    <span className="bg-white/60 px-2 py-0.5 rounded text-[10px]">נקודה {d.from + 1}</span>
+                                                                    <span className="text-[10px]">↔</span>
+                                                                    <span className="bg-white/60 px-2 py-0.5 rounded text-[10px]">נקודה {d.to + 1}</span>
+                                                                </div>
+                                                                <span dir="ltr">{d.dist.toFixed(1)} km</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+
+                                            {selectedDuplicateGroup.locations.map((loc, idx) => {
+                                                let entityName = "לא מזוהה / אוקיינוס";
+                                                if (geoData) {
+                                                    try {
+                                                        const lat = parseFloat(loc.Latitude || loc.latitude);
+                                                        const lng = parseFloat(loc.Longitude || loc.longitude);
+                                                        const matchedFeature = getBestFeatureForPoint(geoData.features, lat, lng);
+                                                        if (matchedFeature) {
+                                                            entityName = getEntityDisplayName(matchedFeature.properties) || "ישות לא ידועה";
+                                                        }
+                                                    } catch(e) {}
+                                                }
+                                                return (
+                                                    <div key={idx} 
+                                                         onClick={() => {
+                                                            if(mapRef.current) mapRef.current.flyTo([loc.Latitude, loc.Longitude], 8, { duration: 1.5 });
+                                                            if(duplicateMarkersRef.current[idx]) duplicateMarkersRef.current[idx].openPopup();
+                                                         }}
+                                                         className="p-4 bg-white border-2 border-slate-200 rounded-xl shadow-sm cursor-pointer hover:border-blue-400 hover:shadow-md transition-all relative overflow-hidden group">
+                                                        <div className="absolute top-0 right-0 bg-slate-200 text-slate-600 px-3 py-1 rounded-bl-xl font-bold text-[10px]">
+                                                            נקודה {idx + 1}
+                                                        </div>
+                                                        <div className="flex justify-between items-start mb-2 mt-2">
+                                                            <div>
+                                                                <div className="font-bold text-slate-800 text-lg group-hover:text-blue-600">{loc['Hebrew Name']}</div>
+                                                                <div className="text-[10px] text-slate-400 uppercase">{loc['English Name']}</div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-[10px] font-mono text-slate-400 bg-slate-50 p-1 rounded border border-slate-100">{parseFloat(loc.Latitude).toFixed(2)}, {parseFloat(loc.Longitude).toFixed(2)}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                                            <div>
+                                                                <div className="text-[10px] text-slate-400 uppercase mb-1">נמצא בשנת {year} תחת:</div>
+                                                                <div className="text-sm font-black text-blue-600">{entityName}</div>
+                                                            </div>
+                                                            <div className="text-xl opacity-0 group-hover:opacity-100 transition-opacity">🎯</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </aside>
+
+                    <main className="flex-1 relative bg-slate-200 flex flex-col">
+                        <div id="map-container" className="flex-1 w-full"></div>
+
+                        <div className="bg-slate-900 text-white px-4 py-3 text-[11px] text-center border-t border-slate-700">
+                            <div className="max-w-3xl mx-auto">Cederman, Lars-Erik, Luc Girardin, Carl Müller-Crepon, and Yannick Pengl. 2025. Nationalism and the Transformation of the State: Border Change and Political Violence in the Modern World. Cambridge University Press.</div>
+                        </div>
+
+                        <div 
+                            className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[85%] max-w-3xl bg-white/95 backdrop-blur-md shadow-xl rounded-3xl p-6 border border-slate-200 z-[1000]"
+                            onMouseDown={e => e.stopPropagation()}
+                            onMouseUp={e => e.stopPropagation()}
+                            onClick={e => e.stopPropagation()}
+                            onDoubleClick={e => e.stopPropagation()}
+                            onWheel={e => e.stopPropagation()}
+                        >
+                            <div className="flex items-center gap-6" dir="ltr">
+                                <span className="text-sm font-bold text-slate-500">1886</span>
+                                <div className="flex-1 relative pt-2">
+                                    <input 
+                                        type="range" min="1886" max="2024" step="1" 
+                                        value={year} 
+                                        onChange={(e) => setYear(parseInt(e.target.value))}
+                                        className="w-full custom-slider"
+                                    />
+                                    <div className="absolute -top-8 px-4 py-1 bg-blue-600 text-white rounded-lg text-sm font-bold shadow-md transform -translate-x-1/2 transition-all pointer-events-none"
+                                         style={{ left: `${((year - 1886) / (2024 - 1886)) * 100}%` }}>
+                                        {year}
+                                    </div>
+                                </div>
+                                <span className="text-sm font-bold text-slate-500">2024</span>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+        if (window.__appBootReady) window.__appBootReady();
+    </script>
+</body>
+</html>
