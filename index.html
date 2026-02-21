@@ -89,7 +89,7 @@
     </style>
 </head>
 <body>
-    <div id="boot-status">טוען את המפה... אם לא מופיע כלום תוך כמה שניות, רענן את הדף ובדוק חיבור אינטרנט.</div>
+    <div id="boot-status">טוען את המפה... / Loading map... אם לא מופיע כלום תוך כמה שניות, רענן את הדף ובדוק חיבור אינטרנט.</div>
     <div id="root"></div>
 
     <script>
@@ -102,11 +102,11 @@
             const showBootError = function (message) {
                 if (!bootEl) return;
                 bootEl.classList.remove('hidden');
-                bootEl.innerHTML = '⚠️ האפליקציה לא נטענה.<br/>' + message + '<br/><br/>נסה לפתוח דרך GitHub Pages או שרת מקומי.';
+                bootEl.innerHTML = '⚠️ האפליקציה לא נטענה / App failed to load.<br/>' + message + '<br/><br/>נסה לפתוח דרך GitHub Pages או שרת מקומי / Try GitHub Pages or a local server.';
             };
 
             window.addEventListener('error', function (event) {
-                const msg = event && event.message ? event.message : 'שגיאה לא ידועה';
+                const msg = event && event.message ? event.message : 'שגיאה לא ידועה / Unknown error';
                 showBootError(msg);
             });
 
@@ -118,7 +118,7 @@
             setTimeout(function () {
                 const root = document.getElementById('root');
                 if (root && root.children.length === 0) {
-                    showBootError('נראה שאחד מקבצי הספריות (React/Babel/Leaflet) לא נטען.');
+                    showBootError('נראה שאחד מקבצי הספריות (React/Babel/Leaflet) לא נטען / A library failed to load.');
                 }
             }, 5000);
         })();
@@ -127,7 +127,99 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
+        const TRANSLATIONS = {
+            he: {
+                appTitle: 'מפה היסטורית',
+                appSubtitle: 'מעקב גבולות בזמן אמת',
+                loadGazetteer: '📂 טען גזטיר (CSV)',
+                loadBoundaries: '📂 טען גבולות (JSON)',
+                loadingData: 'טוען נתונים...',
+                autoLoadFail: '⚠️ לא היה ניתן לטעון אוטומטית (כנראה file://). ניתן להעלות ידנית.',
+                autoLoadError: '⚠️ שגיאה בטעינה אוטומטית. ניתן להעלות ידנית.',
+                locationsLoaded: 'מיקומים נטענו',
+                mapsAvailable: 'מפות זמינות',
+                modeMain: '🎯 ניתוח עיקרי',
+                modeDuplicates: '🔍 שמות כפולים',
+                searchLocationPlaceholder: 'חיפוש מיקום...',
+                selectedLocation: 'מיקום שנבחר:',
+                placeNames: 'שמות המקום',
+                hideAdditionalNames: 'הסתר שמות נוספים',
+                showAdditionalNames: 'הצג את כל השמות הנוספים',
+                entityInYear: 'ישות פוליטית בשנת {year}',
+                unknownEntity: 'ישות לא מזוהה',
+                status: 'סטטוס',
+                capital: 'בירה',
+                area: 'שטח',
+                yearRange: 'טווח שנים',
+                unknown: 'לא ידוע',
+                notAvailable: 'לא זמין',
+                additionalLocationsInEntity: 'מיקומים נוספים באותו גוף:',
+                autoSourcesNote: '📝 נוסף ניהול אוטומטי של מקורות - פנות לתיעוד.',
+                distanceRangeKm: 'טווח מרחקים (ק"מ): {min} – {max}',
+                duplicateSearchPlaceholder: 'חיפוש שם כפול...',
+                duplicateNamesCount: 'שמות כפולים: {count}',
+                pointsCount: '({count} נקודות)',
+                distanceRangeText: 'טווח מרחקים: {min} - {max} ק"מ',
+                distancesBetweenPoints: 'מרחקים בין נקודות:',
+                pointLabel: 'נקודה {index}',
+                foundInYearUnder: 'נמצא בשנת {year} תחת:',
+                unknownOcean: 'לא מזוהה / אוקיינוס',
+                unknownEntityName: 'ישות לא ידועה',
+                citationText: 'החלוקה למרחבים גיאוגרפיים מבוססת על: Cederman, Lars-Erik, Luc Girardin, Carl Müller-Crepon, and Yannick Pengl. 2025. Nationalism and the Transformation of the State: Border Change and Political Violence in the Modern World. Cambridge University Press.',
+                invalidGeoJson: 'הקובץ אינו בפורמט GeoJSON תקין.'
+            },
+            en: {
+                appTitle: 'Historical Map',
+                appSubtitle: 'Real-time border tracking',
+                loadGazetteer: '📂 Load Gazetteer (CSV)',
+                loadBoundaries: '📂 Load Boundaries (JSON)',
+                loadingData: 'Loading data...',
+                autoLoadFail: '⚠️ Could not auto-load files (likely file://). You can upload manually.',
+                autoLoadError: '⚠️ Auto-load error. You can upload manually.',
+                locationsLoaded: 'locations loaded',
+                mapsAvailable: 'maps available',
+                modeMain: '🎯 Main Analysis',
+                modeDuplicates: '🔍 Duplicate Names',
+                searchLocationPlaceholder: 'Search location...',
+                selectedLocation: 'Selected location:',
+                placeNames: 'Place names',
+                hideAdditionalNames: 'Hide additional names',
+                showAdditionalNames: 'Show all additional names',
+                entityInYear: 'Political entity in {year}',
+                unknownEntity: 'Unknown entity',
+                status: 'Status',
+                capital: 'Capital',
+                area: 'Area',
+                yearRange: 'Year range',
+                unknown: 'Unknown',
+                notAvailable: 'Not available',
+                additionalLocationsInEntity: 'More locations in the same entity:',
+                autoSourcesNote: '📝 Automatic source management has been added - see documentation.',
+                distanceRangeKm: 'Distance range (km): {min} – {max}',
+                duplicateSearchPlaceholder: 'Search duplicate name...',
+                duplicateNamesCount: 'Duplicate names: {count}',
+                pointsCount: '({count} points)',
+                distanceRangeText: 'Distance range: {min} - {max} km',
+                distancesBetweenPoints: 'Distances between points:',
+                pointLabel: 'Point {index}',
+                foundInYearUnder: 'In {year}, located under:',
+                unknownOcean: 'Unknown / Ocean',
+                unknownEntityName: 'Unknown entity',
+                citationText: 'Geographical space division is based on: Cederman, Lars-Erik, Luc Girardin, Carl Müller-Crepon, and Yannick Pengl. 2025. Nationalism and the Transformation of the State: Border Change and Political Violence in the Modern World. Cambridge University Press.',
+                invalidGeoJson: 'The file is not a valid GeoJSON format.'
+            }
+        };
+
         const App = () => {
+            const getInitialLanguage = () => {
+                try {
+                    const saved = localStorage.getItem('appLanguage');
+                    return saved === 'en' ? 'en' : 'he';
+                } catch (e) {
+                    return 'he';
+                }
+            };
+
             const [year, setYear] = useState(1950);
             const [geoData, setGeoData] = useState(null);
             const [locations, setLocations] = useState([]);
@@ -143,12 +235,14 @@
             
             const [activeEntityData, setActiveEntityData] = useState(null);
             const [searchTerm, setSearchTerm] = useState("");
+            const [duplicateSearchTerm, setDuplicateSearchTerm] = useState("");
             const [isQuerying, setIsQuerying] = useState(false);
             const [showAllNames, setShowAllNames] = useState(false);
+            const [language, setLanguage] = useState(getInitialLanguage);
             
             // Auto-load states
             const [dataLoaded, setDataLoaded] = useState(false);
-            const [loadingMessage, setLoadingMessage] = useState('טוען נתונים...');
+            const [loadingMessageKey, setLoadingMessageKey] = useState('loadingData');
             
             const mapRef = useRef(null);
             const geoJsonLayerRef = useRef(null);
@@ -156,6 +250,22 @@
             const fileInputRef = useRef(null);
             const geoInputRef = useRef(null);
             const duplicateMarkersRef = useRef({});
+
+            const t = (key, vars = {}) => {
+                let text = (TRANSLATIONS[language] && TRANSLATIONS[language][key]) || TRANSLATIONS.he[key] || key;
+                Object.keys(vars).forEach((varKey) => {
+                    text = text.replaceAll(`{${varKey}}`, String(vars[varKey]));
+                });
+                return text;
+            };
+
+            useEffect(() => {
+                try {
+                    localStorage.setItem('appLanguage', language);
+                } catch (e) {}
+                document.documentElement.lang = language;
+                document.documentElement.dir = language === 'he' ? 'rtl' : 'ltr';
+            }, [language]);
 
             const getPropValue = (props, keys) => {
                 if (!props) return null;
@@ -255,11 +365,13 @@
             }, [locations]);
 
             const displayedDuplicates = useMemo(() => {
+                const normalizedTerm = duplicateSearchTerm.trim().toLowerCase();
                 return duplicateNamesGroups.filter(g => {
                     if (!g.distances || g.distances.length === 0) return false;
+                    if (normalizedTerm && !String(g.name || '').toLowerCase().includes(normalizedTerm)) return false;
                     return g.distances.some(d => d.dist >= minDistanceFilter && d.dist <= maxDistanceFilter);
                 });
-            }, [duplicateNamesGroups, minDistanceFilter, maxDistanceFilter]);
+            }, [duplicateNamesGroups, minDistanceFilter, maxDistanceFilter, duplicateSearchTerm]);
 
             useEffect(() => {
                 if (!selectedDuplicateGroup) return;
@@ -363,7 +475,7 @@
             useEffect(() => {
                 let cancelled = false;
                 const autoLoadFiles = async () => {
-                    setLoadingMessage('טוען נתונים...');
+                    setLoadingMessageKey('loadingData');
                     let csvLoaded = false;
                     let geoLoaded = false;
                     
@@ -410,16 +522,16 @@
                         if (!cancelled) {
                             setDataLoaded(true);
                             if (csvLoaded || geoLoaded) {
-                                setLoadingMessage('');
+                                setLoadingMessageKey('');
                             } else {
-                                setLoadingMessage('⚠️ לא היה ניתן לטעון אוטומטית (כנראה file://). ניתן להעלות ידנית.');
+                                setLoadingMessageKey('autoLoadFail');
                             }
                         }
                     } catch (error) {
                         console.error('Error auto-loading files:', error);
                         if (!cancelled) {
                             setDataLoaded(true);
-                            setLoadingMessage('⚠️ שגיאה בטעינה אוטומטית. ניתן להעלות ידנית.');
+                            setLoadingMessageKey('autoLoadError');
                         }
                     }
                 };
@@ -457,9 +569,9 @@
                         const filteredData = filterGeoJSONByYear(parsed, year);
                         setGeoData(filteredData.collection);
                         console.log('✓ GeoJSON loaded:', parsed.features.length, 'features');
-                        setLoadingMessage('');
+                        setLoadingMessageKey('');
                     } catch (err) {
-                        alert("הקובץ אינו בפורמט GeoJSON תקין.");
+                        alert(t('invalidGeoJson'));
                     } finally { setIsQuerying(false); }
                 };
                 reader.readAsText(file);
@@ -674,12 +786,18 @@
             };
 
             return (
-                <div className="h-screen bg-slate-50 text-slate-800 flex flex-col">
+                <div className="h-screen bg-slate-50 text-slate-800 flex flex-col" dir={language === 'he' ? 'rtl' : 'ltr'}>
                     <div className="flex flex-1 min-h-0">
                     <aside className="w-96 bg-white border-r border-slate-300 overflow-y-auto flex flex-col">
                         <div className="p-6 border-b border-slate-200">
-                            <h1 className="text-2xl font-black text-blue-600 mb-1">מפה היסטורית</h1>
-                            <p className="text-xs text-slate-500">מעקב גבולות בזמן אמת</p>
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                                <h1 className="text-2xl font-black text-blue-600">{t('appTitle')}</h1>
+                                <div className="flex items-center bg-slate-100 rounded-lg p-1 text-[11px] font-bold">
+                                    <button onClick={() => setLanguage('he')} className={`px-2 py-1 rounded ${language === 'he' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>HE</button>
+                                    <button onClick={() => setLanguage('en')} className={`px-2 py-1 rounded ${language === 'en' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>EN</button>
+                                </div>
+                            </div>
+                            <p className="text-xs text-slate-500">{t('appSubtitle')}</p>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -688,22 +806,22 @@
                                     <div className="flex gap-2">
                                         <div className="flex-1">
                                             <button onClick={() => fileInputRef.current.click()} className="w-full bg-green-50 hover:bg-green-100 text-green-700 p-2 rounded-lg font-bold border border-green-300 text-sm shadow-sm transition-all">
-                                                📂 טען גזטיר (CSV)
+                                                {t('loadGazetteer')}
                                             </button>
                                             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" className="hidden" />
                                         </div>
                                         <div className="flex-1">
                                             <button onClick={() => geoInputRef.current.click()} className="w-full bg-green-50 hover:bg-green-100 text-green-700 p-2 rounded-lg font-bold border border-green-300 text-sm shadow-sm transition-all">
-                                                📂 טען גבולות (JSON)
+                                                {t('loadBoundaries')}
                                             </button>
                                             <input type="file" ref={geoInputRef} onChange={handleGeoFileUpload} accept=".geojson,.json" className="hidden" />
                                         </div>
                                     </div>
                                 )}
                                 <div className="text-[10px] text-center text-slate-600 space-y-1">
-                                    {loadingMessage && <div className="text-blue-600 font-bold">{loadingMessage}</div>}
-                                    {locations.length > 0 && <div className="text-green-600 font-bold">✓ {locations.length} מיקומים נטענו</div>}
-                                    {rawCShapesData && <div className="text-green-600 font-bold">✓ מפות זמינות</div>}
+                                    {loadingMessageKey && <div className="text-blue-600 font-bold">{t(loadingMessageKey)}</div>}
+                                    {locations.length > 0 && <div className="text-green-600 font-bold">✓ {locations.length} {t('locationsLoaded')}</div>}
+                                    {rawCShapesData && <div className="text-green-600 font-bold">✓ {t('mapsAvailable')}</div>}
                                 </div>
                             </div>
 
@@ -712,13 +830,13 @@
                                     className={`flex-1 p-2 text-sm font-bold rounded-lg transition-all ${analysisMode === 'main' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}
                                     onClick={() => switchMode('main')}
                                 >
-                                    🎯 ניתוח עיקרי
+                                    {t('modeMain')}
                                 </button>
                                 <button 
                                     className={`flex-1 p-2 text-sm font-bold rounded-lg transition-all ${analysisMode === 'duplicates' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-500 hover:bg-slate-300'}`}
                                     onClick={() => switchMode('duplicates')}
                                 >
-                                    🔍 שמות כפולים
+                                    {t('modeDuplicates')}
                                 </button>
                             </div>
 
@@ -726,7 +844,7 @@
                                 <div className="space-y-3">
                                     <input
                                         type="text"
-                                        placeholder="חיפוש מיקום..."
+                                        placeholder={t('searchLocationPlaceholder')}
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
@@ -747,19 +865,19 @@
                                     {selectedLocation && (
                                         <div className="bg-white border-2 border-blue-300 rounded-xl p-4 space-y-3">
                                             <div>
-                                                <div className="text-sm font-bold text-slate-700">מיקום שנבחר:</div>
+                                                <div className="text-sm font-bold text-slate-700">{t('selectedLocation')}</div>
                                                 <div className="font-bold text-lg text-blue-600">{selectedLocation['Hebrew Name']}</div>
                                                 <div className="text-[10px] text-slate-400">{selectedLocation['English Name']}</div>
                                             </div>
 
                                             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-                                                <div className="text-xs font-bold text-slate-700">שמות המקום</div>
+                                                <div className="text-xs font-bold text-slate-700">{t('placeNames')}</div>
                                                 {selectedLocationNames.length > 2 && (
                                                     <button
                                                         onClick={() => setShowAllNames(!showAllNames)}
                                                         className="text-[11px] font-bold text-blue-600 hover:text-blue-700"
                                                     >
-                                                        {showAllNames ? 'הסתר שמות נוספים' : 'הצג את כל השמות הנוספים'}
+                                                        {showAllNames ? t('hideAdditionalNames') : t('showAdditionalNames')}
                                                     </button>
                                                 )}
                                                 {showAllNames && selectedLocationNames.length > 0 && (
@@ -775,23 +893,23 @@
 
                                             {activeEntityData && (
                                                 <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 p-4 rounded-xl shadow-sm space-y-3">
-                                                    <div className="text-xs font-bold text-blue-700">ישות פוליטית בשנת {year}</div>
-                                                    <div className="font-black text-xl text-blue-700 leading-tight">{getEntityDisplayName(activeEntityData) || 'ישות לא מזוהה'}</div>
+                                                    <div className="text-xs font-bold text-blue-700">{t('entityInYear', { year })}</div>
+                                                    <div className="font-black text-xl text-blue-700 leading-tight">{getEntityDisplayName(activeEntityData) || t('unknownEntity')}</div>
                                                     <div className="grid grid-cols-2 gap-2 text-[11px]">
                                                         <div className="bg-white/70 border border-blue-100 rounded-md px-2 py-1">
-                                                            <div className="text-slate-500">סטטוס</div>
-                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['Status', 'status']) || 'לא ידוע'}</div>
+                                                            <div className="text-slate-500">{t('status')}</div>
+                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['Status', 'status']) || t('unknown')}</div>
                                                         </div>
                                                         <div className="bg-white/70 border border-blue-100 rounded-md px-2 py-1">
-                                                            <div className="text-slate-500">בירה</div>
-                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['Capital', 'capital']) || 'לא זמין'}</div>
+                                                            <div className="text-slate-500">{t('capital')}</div>
+                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['Capital', 'capital']) || t('notAvailable')}</div>
                                                         </div>
                                                         <div className="bg-white/70 border border-blue-100 rounded-md px-2 py-1">
-                                                            <div className="text-slate-500">שטח</div>
-                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['Area', 'area']) || 'לא זמין'}</div>
+                                                            <div className="text-slate-500">{t('area')}</div>
+                                                            <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['Area', 'area']) || t('notAvailable')}</div>
                                                         </div>
                                                         <div className="bg-white/70 border border-blue-100 rounded-md px-2 py-1">
-                                                            <div className="text-slate-500">טווח שנים</div>
+                                                            <div className="text-slate-500">{t('yearRange')}</div>
                                                             <div className="font-bold text-slate-700">{getPropValue(activeEntityData, ['From', 'from']) || '?'}–{getPropValue(activeEntityData, ['To', 'to']) || '?'}</div>
                                                         </div>
                                                     </div>
@@ -800,7 +918,7 @@
 
                                             {locationsInEntity.length > 0 && (
                                                 <div className="bg-blue-50 p-3 rounded-lg">
-                                                    <div className="font-bold text-sm text-blue-700 mb-2">מיקומים נוספים באותו גוף:</div>
+                                                    <div className="font-bold text-sm text-blue-700 mb-2">{t('additionalLocationsInEntity')}</div>
                                                     <div className="space-y-1">
                                                         {locationsInEntity.map((loc, idx) => (
                                                             <div key={idx} onClick={() => handleLocationSelect(loc)} className="text-xs flex justify-between p-2 rounded cursor-pointer hover:bg-blue-100 transition-all">
@@ -813,7 +931,7 @@
                                             )}
 
                                             <div className="bg-slate-100 border border-slate-300 rounded-xl p-4 text-center text-slate-600 text-sm">
-                                                📝 נוסף ניהול אוטומטי של מקורות - פנות לתיעוד.
+                                                {t('autoSourcesNote')}
                                             </div>
                                         </div>
                                     )}
@@ -823,7 +941,7 @@
                             {analysisMode === 'duplicates' && (
                                 <div className="space-y-3">
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold text-slate-600">טווח מרחקים (ק"מ): {minDistanceFilter.toFixed(0)} – {maxDistanceFilter.toFixed(0)}</label>
+                                        <label className="text-xs font-bold text-slate-600">{t('distanceRangeKm', { min: minDistanceFilter.toFixed(0), max: maxDistanceFilter.toFixed(0) })}</label>
                                         <div className="relative pt-2" dir="ltr">
                                             <div className="h-[6px] bg-slate-200 rounded"></div>
                                             <div
@@ -863,7 +981,15 @@
                                         </div>
                                     </div>
 
-                                    <div className="text-xs text-slate-600 font-bold">שמות כפולים: {displayedDuplicates.length}</div>
+                                    <input
+                                        type="text"
+                                        placeholder={t('duplicateSearchPlaceholder')}
+                                        value={duplicateSearchTerm}
+                                        onChange={(e) => setDuplicateSearchTerm(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-orange-500"
+                                    />
+
+                                    <div className="text-xs text-slate-600 font-bold">{t('duplicateNamesCount', { count: displayedDuplicates.length })}</div>
                                     
                                     <div className="space-y-2 max-h-96 overflow-y-auto">
                                         {displayedDuplicates.map((group, idx) => (
@@ -874,9 +1000,12 @@
                                                     : 'bg-white border-slate-200 hover:border-orange-300'
                                                 }`}>
                                                 <div className="font-bold text-slate-800">{group.name}</div>
-                                                <div className="text-[11px] text-slate-500">({group.locations.length} נקודות)</div>
+                                                <div className="text-[11px] text-slate-500">{t('pointsCount', { count: group.locations.length })}</div>
                                                 <div className="text-[11px] text-slate-500" dir="ltr">
-                                                    {`טווח מרחקים: ${Number.isFinite(group.minDistance) ? group.minDistance.toFixed(1) : '0.0'} - ${Number.isFinite(group.maxDistance) ? group.maxDistance.toFixed(1) : '0.0'} ק"מ`}
+                                                    {t('distanceRangeText', {
+                                                        min: Number.isFinite(group.minDistance) ? group.minDistance.toFixed(1) : '0.0',
+                                                        max: Number.isFinite(group.maxDistance) ? group.maxDistance.toFixed(1) : '0.0'
+                                                    })}
                                                 </div>
                                             </div>
                                         ))}
@@ -888,7 +1017,7 @@
 
                                             {selectedDuplicateGroup.distances.length > 0 && (
                                                 <div className="space-y-2">
-                                                    <div className="text-xs font-bold text-slate-700">מרחקים בין נקודות:</div>
+                                                    <div className="text-xs font-bold text-slate-700">{t('distancesBetweenPoints')}</div>
                                                     {selectedDuplicateGroup.distances.map((d, i) => {
                                                         let colorClass = 'bg-green-50 text-green-900 border-green-200';
                                                         let warningIcon = '✅';
@@ -903,9 +1032,9 @@
                                                             <div key={i} className={`p-2 rounded-lg border flex justify-between items-center text-sm font-bold ${colorClass}`}>
                                                                 <div className="flex gap-2 items-center">
                                                                     <span>{warningIcon}</span>
-                                                                    <span className="bg-white/60 px-2 py-0.5 rounded text-[10px]">נקודה {d.from + 1}</span>
+                                                                    <span className="bg-white/60 px-2 py-0.5 rounded text-[10px]">{t('pointLabel', { index: d.from + 1 })}</span>
                                                                     <span className="text-[10px]">↔</span>
-                                                                    <span className="bg-white/60 px-2 py-0.5 rounded text-[10px]">נקודה {d.to + 1}</span>
+                                                                    <span className="bg-white/60 px-2 py-0.5 rounded text-[10px]">{t('pointLabel', { index: d.to + 1 })}</span>
                                                                 </div>
                                                                 <span dir="ltr">{d.dist.toFixed(1)} km</span>
                                                             </div>
@@ -915,14 +1044,14 @@
                                             )}
 
                                             {selectedDuplicateGroup.locations.map((loc, idx) => {
-                                                let entityName = "לא מזוהה / אוקיינוס";
+                                                let entityName = t('unknownOcean');
                                                 if (geoData) {
                                                     try {
                                                         const lat = parseFloat(loc.Latitude || loc.latitude);
                                                         const lng = parseFloat(loc.Longitude || loc.longitude);
                                                         const matchedFeature = getBestFeatureForPoint(geoData.features, lat, lng);
                                                         if (matchedFeature) {
-                                                            entityName = getEntityDisplayName(matchedFeature.properties) || "ישות לא ידועה";
+                                                            entityName = getEntityDisplayName(matchedFeature.properties) || t('unknownEntityName');
                                                         }
                                                     } catch(e) {}
                                                 }
@@ -934,7 +1063,7 @@
                                                          }}
                                                          className="p-4 bg-white border-2 border-slate-200 rounded-xl shadow-sm cursor-pointer hover:border-blue-400 hover:shadow-md transition-all relative overflow-hidden group">
                                                         <div className="absolute top-0 right-0 bg-slate-200 text-slate-600 px-3 py-1 rounded-bl-xl font-bold text-[10px]">
-                                                            נקודה {idx + 1}
+                                                            {t('pointLabel', { index: idx + 1 })}
                                                         </div>
                                                         <div className="flex justify-between items-start mb-2 mt-2">
                                                             <div>
@@ -947,7 +1076,7 @@
                                                         </div>
                                                         <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
                                                             <div>
-                                                                <div className="text-[10px] text-slate-400 uppercase mb-1">נמצא בשנת {year} תחת:</div>
+                                                                <div className="text-[10px] text-slate-400 uppercase mb-1">{t('foundInYearUnder', { year })}</div>
                                                                 <div className="text-sm font-black text-blue-600">{entityName}</div>
                                                             </div>
                                                             <div className="text-xl opacity-0 group-hover:opacity-100 transition-opacity">🎯</div>
@@ -995,7 +1124,7 @@
                     </div>
 
                     <div className="fixed bottom-0 left-0 right-0 z-[1100] bg-slate-900 text-white px-4 py-3 text-[11px] text-center border-t border-slate-700 shadow-lg">
-                        <div className="max-w-6xl mx-auto">החלוקה למרחבים גיאוגרפיים מבוססת על: Cederman, Lars-Erik, Luc Girardin, Carl Müller-Crepon, and Yannick Pengl. 2025. Nationalism and the Transformation of the State: Border Change and Political Violence in the Modern World. Cambridge University Press.</div>
+                        <div className="max-w-6xl mx-auto">{t('citationText')}</div>
                     </div>
                 </div>
             );
