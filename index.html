@@ -166,6 +166,7 @@
                 unknownOcean: 'לא מזוהה / אוקיינוס',
                 unknownEntityName: 'ישות לא ידועה',
                 citationText: 'החלוקה למרחבים גיאוגרפיים מבוססת על: Cederman, Lars-Erik, Luc Girardin, Carl Müller-Crepon, and Yannick Pengl. 2025. Nationalism and the Transformation of the State: Border Change and Political Violence in the Modern World. Cambridge University Press.',
+                gazetteerProjectCredit: 'הגזטיר הוא חלק מפרויקט HaMapah - Quantitative Analysis of Rabbinic Literature.',
                 invalidGeoJson: 'הקובץ אינו בפורמט GeoJSON תקין.'
             },
             en: {
@@ -206,6 +207,7 @@
                 unknownOcean: 'Unknown / Ocean',
                 unknownEntityName: 'Unknown entity',
                 citationText: 'Geographical space division is based on: Cederman, Lars-Erik, Luc Girardin, Carl Müller-Crepon, and Yannick Pengl. 2025. Nationalism and the Transformation of the State: Border Change and Political Violence in the Modern World. Cambridge University Press.',
+                gazetteerProjectCredit: 'The gazetteer is part of the HaMapah - Quantitative Analysis of Rabbinic Literature project.',
                 invalidGeoJson: 'The file is not a valid GeoJSON format.'
             }
         };
@@ -1094,6 +1096,10 @@
                     <main className="flex-1 relative bg-slate-200 flex flex-col">
                         <div id="map-container" className="flex-1 w-full"></div>
 
+                        <div className="absolute top-3 right-3 z-[1000] bg-white/90 backdrop-blur-sm border border-slate-200 rounded-md px-2 py-1 shadow-sm">
+                            <img src="LOGO.svg" alt="Eliyahu Lab" className="h-7 w-auto" />
+                        </div>
+
                         <div 
                             className="absolute bottom-14 left-1/2 -translate-x-1/2 w-[85%] max-w-3xl bg-white/95 backdrop-blur-md shadow-xl rounded-3xl p-6 border border-slate-200 z-[1000]"
                             onMouseDown={e => e.stopPropagation()}
@@ -1124,7 +1130,9 @@
                     </div>
 
                     <div className="fixed bottom-0 left-0 right-0 z-[1100] bg-slate-900 text-white px-4 py-3 text-[11px] text-center border-t border-slate-700 shadow-lg">
-                        <div className="max-w-6xl mx-auto">{t('citationText')}</div>
+                        <div className="max-w-6xl mx-auto">
+                            {t('citationText')} | {t('gazetteerProjectCredit')}
+                        </div>
                     </div>
                 </div>
             );
